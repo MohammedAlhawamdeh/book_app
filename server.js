@@ -1,91 +1,94 @@
 'use strict';
 
 const express = require('express');
-const app = express();
-const superagent = require('superagent')
-const PORT = process.env.PORT||3000;
+const superagent = require('superagent');
+// const cors = require('cors');
+
 require('dotenv').config();
 
+//app setup
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.set('view engine','ejs');
-app.use(express.urlencoded());
-app.use(express.static('views'));
-app.use('/public', express.static('public'));
+//app middleware
+// app.use(cors());
 
+app.use(express.urlencoded({extended: true}));
+app.use(express.static('./public'));
 
-app.get('/',(req,res) => {
-    // res.status(200).send('book-app');
-    res.render('./pages/index')
+//database setup
+// const client = new Client(process.env.DATABASE_URL);
+
+// client.connect();
+// // error handler
+// client.on('error', err => console.error(err));
+
+//set template
+app.set('view engine', 'ejs');
+
+app.get('/', (req, res) => {
+  res.render('../views/pages/index');
 });
 
-app.get('/books',(req,res)=>{
-    const url = `https://www.googleapis.com/books/v1/volumes?q=amman`;
-    superagent.get(url)
-    .then(data =>{
-        console.log(data.body.items);
-        res.render('show',{'show': data.body});
-    });
-});
+app.post('/searches', getBook);
 
-function Book (data){
-    this.image = data.image;
-    this.title = data.title;
-    this.author = data.author;
-    this.description = data.description
+//helper function
+function getBook(req, res) {
+  const bookHandler = {
+    query: req.body.searchby[0],
+    queryType: req.body === 'on' ? 'intitle' : 'inauthor',
+  };
+
+
+  //grab API data if the database is empty
+  Book.fetch(bookHandler, res);
 }
 
-// function getBookData
+//book constructor function
+function Book(data) {
+  this.title = data.volumeInfo.title;
+  this.author = data.volumeInfo.authors;
+  this.description = data.volumeInfo.description;
+  if (data.volumeInfo.imageLinks)
+  {
+    this.image = data.volumeInfo.imageLinks.thumbnail;
+  }
+  else
+  {
+    this.img_url = 'https://via.placeholder.com/150';
+  }
+}
 
-// fucntion bookHandler(request , response){
-//     let title = request.query['title'];
-//     let author = request.query['authors'];
+Book.fetch = function (bookHandler, res) {
+  //fetch data from google books API
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${bookHandler.queryType}:${bookHandler.query}`;
+  superagent.get(url)
+    .then(results => {
+      let bookArray = Book.createBooks(results.body.items);
+      return bookArray;
+    })
+    .then (results => {
+      res.render('./pages/searches/show', { allBooks: results});
+    });
+};
 
-// }
+Book.createBooks = function (bookInfo) {
+  //this makes an array of books that will be rendered on the page
+  let allBooks = [];
+  if (bookInfo.length < 1) {
+    return allBooks;
+  } else {
+    if (bookInfo.length > 10) {
+      bookInfo = bookInfo.slice [0,10];
+    }
+    allBooks = bookInfo.map (item => {
+      let book = new Book (item);
+      return book;
+    });
+    return allBooks;
+  }
+};
 
-
-
-app.post('/book', (req,res) =>{
-    // res.render('./pages/index');
-    // console.log(req.body);
-    // res.sendFile('./index.ejs', {root: './public'});
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//==========================================
-app.get('*',(req,res) =>{
-    res.status(404).send('Not Found');
-});
-
-app.listen(PORT,()=>{
-    console.log('Listening on PORT 3000');
+app.listen(PORT, () => {
+  console.log(`listening on PORT: ${PORT}`);
 });
