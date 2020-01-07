@@ -1,94 +1,89 @@
-'use strict';
+'use strict'
+
 
 const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3333;
 const superagent = require('superagent');
-// const cors = require('cors');
-
+// const googleKey = process.env.googleKey;
 require('dotenv').config();
 
-//app setup
-const app = express();
-const PORT = process.env.PORT || 3000;
 
-//app middleware
-// app.use(cors());
-
-app.use(express.urlencoded({extended: true}));
-app.use(express.static('./public'));
-
-//database setup
-// const client = new Client(process.env.DATABASE_URL);
-
-// client.connect();
-// // error handler
-// client.on('error', err => console.error(err));
-
-//set template
 app.set('view engine', 'ejs');
+app.use(express.urlencoded({ extended: true }));
+
+
+app.listen(PORT, () => console.log('first Baby Step'));
 
 app.get('/', (req, res) => {
-  res.render('../views/pages/index');
+  res.render('pages/index')
 });
 
-app.post('/searches', getBook);
+app.post('/searches', booksHandler);
 
-//helper function
-function getBook(req, res) {
-  const bookHandler = {
-    query: req.body.searchby[0],
-    queryType: req.body === 'on' ? 'intitle' : 'inauthor',
-  };
-
-
-  //grab API data if the database is empty
-  Book.fetch(bookHandler, res);
-}
-
-//book constructor function
-function Book(data) {
-  this.title = data.volumeInfo.title;
-  this.author = data.volumeInfo.authors;
-  this.description = data.volumeInfo.description;
-  if (data.volumeInfo.imageLinks)
-  {
-    this.image = data.volumeInfo.imageLinks.thumbnail;
-  }
-  else
-  {
-    this.img_url = 'https://via.placeholder.com/150';
-  }
-}
-
-Book.fetch = function (bookHandler, res) {
-  //fetch data from google books API
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${bookHandler.queryType}:${bookHandler.query}`;
-  superagent.get(url)
-    .then(results => {
-      let bookArray = Book.createBooks(results.body.items);
-      return bookArray;
+function booksHandler(req, res) {
+  console.log('handler works')
+  let book = req.body.bookTitle;
+  console.log(book);
+  booksData(book)
+    .then((conData) => {
+      console.log(conData)
+      res.status(200).render('pages/searches/show', { result: conData });
+      // res.send(conData);
     })
-    .then (results => {
-      res.render('./pages/searches/show', { allBooks: results});
-    });
-};
+}
 
-Book.createBooks = function (bookInfo) {
-  //this makes an array of books that will be rendered on the page
-  let allBooks = [];
-  if (bookInfo.length < 1) {
-    return allBooks;
-  } else {
-    if (bookInfo.length > 10) {
-      bookInfo = bookInfo.slice [0,10];
-    }
-    allBooks = bookInfo.map (item => {
-      let book = new Book (item);
+function booksData(bookTitle) {
+  const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${bookTitle}`;
+  console.log('data works')
+
+  return superagent.get(url)
+    .then(data => {
+      // console.log(data.body.items[0].volumeInfo.imageLinks.thumbnail);
+      let book = data.body.items.map((one) => {
+        // if (one.volumeInfo.imageLinks.smallThumbnail && one.volumeInfo.title && one.volumeInfo.authors && one.volumeInfo.description) {
+        // console.log(one.volumeInfo.authors);
+        return new Book(one);
+        // }
+        // console.log(book);
+      })
+      console.log('hiiii', book);
       return book;
     });
-    return allBooks;
-  }
-};
+}
 
-app.listen(PORT, () => {
-  console.log(`listening on PORT: ${PORT}`);
-});
+
+
+/// the constuctor function
+
+function Book(data) {
+  this.image = (data.volumeInfo.imageLinks && data.volumeInfo.imageLinks.thumbnail) ? data.volumeInfo.imageLinks.thumbnail:'https://i.imgur.com/J5LVHEL.jpg';
+  this.title = data.volumeInfo.title ? data.volumeInfo.title : 'Title Not Found !!';
+  this.author = data.volumeInfo.authors ? data.volumeInfo.authors : 'Author Not Found !!';
+  this.description = data.volumeInfo.description ? data.volumeInfo.description : 'Descripton Not Found !!';
+
+}
+
+
+
+
+//link the css file
+//thank you ayman
+app.use('/public', express.static('public'));
+
+
+
+// app.use(express.static('public'));
+
+//test our index !!
+// app.get( '/test' , (req , res) => {
+//   res.render('pages/index') ;
+// })
+
+
+// errors
+let message = 'ERROR OCCURED ABORT MISSION!!'
+app.get('*', (req, res) => {
+  res.status(404).render('./pages/error', { 'message': message }
+  )
+})
